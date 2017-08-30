@@ -1,0 +1,246 @@
+Environment
+
+    Red Hat Enterprise Linux 6
+    ActiveCard ZFG-9800-AC
+    Oberthur ID One 128 v5.5 Dual
+    Gemalto TOPDL GX4 144
+
+Configuration:
+ 
+Quick Steps:
+
+    Install Smart card support
+        # yum groupinstall "Smart card support"
+    Enable and start the PC/SC Smart Card Daemon
+        # service pcscd start
+        # chkconfig pcscd on
+    Install Root CA Certificate
+        # certutil -A -n DODJITCCA_29.cer -t "CT,C,C" -d /etc/pki/nssdb/ -i DODJITCCA_29.cer
+    Verify Root CA
+        # certutil -L -d /etc/pki/nssdb/
+    Create and configure the CN (Common Name) mapping file for the user using the Smart Card CN
+        # cat /etc/pam_pkcs11/cn_map
+        MCINTOSH.COURTNEY.2001396571 -> shadowman
+    Enable Smart Card Authentication in Gnome
+        Click System -> Administration -> Authentication
+        Click Advanced Options and Check Enable smart card support and click Apply
+    Log out of Gnome and try authenticating against the smart card
+
+ 
+Detailed Steps:
+
+    * Install Smart card support
+        # yum grouplist | grep -i smart
+
+    [root@thirdstrike ~]# yum grouplist | grep -i smart  
+    This system is not registered to Red Hat Subscription Management. You can use subscription-manager to register.  
+       Smart card support  
+
+        # yum groupinstall "Smart card support"
+
+    [root@thirdstrike ~]# yum groupinstall "Smart card support"  
+    Loaded plugins: product-id, refresh-packagekit, rhnplugin, security,  
+                  : subscription-manager  
+    This system is not registered to Red Hat Subscription Management. You can use subscription-manager to register.  
+    This system is receiving updates from RHN Classic or RHN Satellite.  
+    Setting up Group Process  
+    Resolving Dependencies  
+    --> Running transaction check  
+    ---> Package ccid.x86_64 0:1.3.9-6.el6 will be installed  
+    --> Processing Dependency: pcsc-lite >= 1.3.3 for package: ccid-1.3.9-6.el6.x86_64  
+    --> Processing Dependency: libpcsclite.so.1()(64bit) for package: ccid-1.3.9-6.el6.x86_64  
+    ---> Package coolkey.x86_64 0:1.1.0-31.el6 will be installed  
+    ---> Package esc.x86_64 0:1.1.0-26.el6 will be installed  
+    ---> Package gdm-plugin-smartcard.x86_64 1:2.30.4-52.el6 will be installed  
+    ---> Package pam_pkcs11.x86_64 0:0.6.2-12.1.el6 will be installed  
+    --> Running transaction check  
+    ---> Package pcsc-lite.x86_64 0:1.5.2-13.el6_4 will be installed  
+    ---> Package pcsc-lite-libs.x86_64 0:1.5.2-13.el6_4 will be installed  
+    --> Finished Dependency Resolution  
+      
+    Dependencies Resolved  
+      
+    ================================================================================  
+    Package                Arch     Version           Repository              Size  
+    ================================================================================  
+    Installing:  
+    ccid                   x86_64   1.3.9-6.el6       rhel-x86_64-server-6   121 k  
+    coolkey                x86_64   1.1.0-31.el6      rhel-x86_64-server-6    95 k  
+    esc                    x86_64   1.1.0-26.el6      rhel-x86_64-server-6   364 k  
+    gdm-plugin-smartcard   x86_64   1:2.30.4-52.el6   rhel-x86_64-server-6   111 k  
+    pam_pkcs11             x86_64   0.6.2-12.1.el6    rhel-x86_64-server-6   192 k  
+    Installing for dependencies:  
+    pcsc-lite              x86_64   1.5.2-13.el6_4    rhel-x86_64-server-6   130 k  
+    pcsc-lite-libs         x86_64   1.5.2-13.el6_4    rhel-x86_64-server-6    28 k  
+      
+    Transaction Summary  
+    ================================================================================  
+    Install       7 Package(s)  
+      
+    Total download size: 1.0 M  
+    Installed size: 0  
+    Is this ok [y/N]:  
+
+    * Enable and start the PC/SC Smart Card Daemon
+        # service pcscd start
+        # chkconfig pcscd on
+    * Plug-in your CAC reader and verify
+        # dmesg
+
+    ...  
+    usb 1-5.1: new full speed USB device number 5 using ehci_hcd  
+    usb 1-5.1: New USB device found, idVendor=04e6, idProduct=e001  
+    usb 1-5.1: New USB device strings: Mfr=1, Product=2, SerialNumber=5  
+    usb 1-5.1: Product: SCRx31 USB Smart Card Reader  
+    usb 1-5.1: Manufacturer: SCM Microsystems Inc.  
+    usb 1-5.1: SerialNumber: 210011ED  
+    usb 1-5.1: configuration #1 chosen from 1 choice  
+
+ 
+    * Check to ensure the smart card library is in the NSS secmod database
+    * For your system to access your smartcard, it’ll need to use a library to access it.  The NSS database may already have the library loaded as a module, but it is important to check.
+    * To check the loaded modules in NSS, use the modutil command:
+
+    [root@thirdstrike ~]# modutil -list -dbdir /etc/pki/nssdb/  
+      
+    Listing of PKCS #11 Modules  
+    -----------------------------------------------------------  
+      1. NSS Internal PKCS #11 Module  
+         slots: 2 slots attached  
+        status: loaded  
+      
+         slot: NSS Internal Cryptographic Services  
+        token: NSS Generic Crypto Services  
+      
+         slot: NSS User Private Key and Certificate Services  
+        token: NSS Certificate DB  
+      
+      2. CoolKey PKCS #11 Module  
+        library name: libcoolkeypk11.so  
+         slots: 1 slot attached  
+        status: loaded  
+      
+         slot: SCM SCR 331 (210011ED) 00 00  
+        token: MCINTOSH.COURTNEY.2001396571  
+    -----------------------------------------------------------  
+
+    * Notice above that the “NSS Internal PKCS#11 Module” and the “CoolKey PKCS #11 Module” modules are loaded. The NSS internal module is always loaded in NSS databases; the important module here is the CoolKey one.
+    * If a smartcard module isn’t loaded, you can load one with the modutil command:
+
+    [root@thirdstrike ~]# modutil -add "CoolKey PKCS #11 Module" -libfile /usr/lib64/libcoolkeypk11.so -dbdir /etc/pki/nssdb  
+
+    * Download the Root CA Certificate
+        - DoD Root CA Certificate
+            http://dodpki.c3pki.chamb.disa.mil/rootca.html
+        - JTIC (Joint Interoperability Test Command) Root CA Certificate
+            https://ca-27.c3pki.nit.disa.mil/ca/
+        - If you do not know the signing cert or the above do not work
+            Find the CN name from the card with pkcs11_listcerts
+
+    [root@thirdstrike ~]# pkcs11_listcerts  
+    PIN for token:  
+    Found '2' certificate(s)  
+    Certificate #1:  
+    - Subject:   CN=MCINTOSH.COURTNEY.2001396571,OU=USAF,OU=PKI,OU=DoD,O=U.S. Government,C=US  
+    - Issuer:    CN=DOD JITC CA-29,OU=PKI,OU=DoD,O=U.S. Government,C=US  
+    - Algorithm: PKCS #1 RSA Encryption  
+    verify_certificate() failed:  
+    Certificate #2:  
+    - Subject:   CN=MCINTOSH.COURTNEY.2001396571,OU=USAF,OU=PKI,OU=DoD,O=U.S. Government,C=US  
+    - Issuer:    CN=DOD JITC EMAIL CA-29,OU=PKI,OU=DoD,O=U.S. Government,C=US  
+    - Algorithm: PKCS #1 RSA Encryption  
+    verify_certificate() failed:   
+
+
+    * Pull the CAC ID Certificate from the card and find the signing cert
+
+    [root@thirdstrike ~]# certutil -L -n "MCINTOSH.COURTNEY.2001396571:CAC ID Certificate" -d /etc/pki/nssdb/ | grep -i URI  
+    Enter Password or Pin for "MCINTOSH.COURTNEY.2001396571":  
+                    URI: "http://crl.nit.disa.mil/crl/DODJITCCA_29.crl"  
+                    URI: "http://crl.nit.disa.mil/sign/DODJITCCA_29.cer"  
+                    URI: "http://ocsp.nsn0.rcvs.nit.disa.mil"  
+                    URI: "http://crl.nit.disa.mil/crl/DODJITCEMAILCA_29.crl"  
+                    URI: "http://crl.nit.disa.mil/sign/DODJITCEMAILCA_29.cer"  
+                    URI: "http://ocsp.nsn0.rcvs.nit.disa.mil"  
+                    URI: "http://crl.nit.disa.mil/crl/DODJITCEMAILCA_29.crl"  
+                    URI: "http://crl.nit.disa.mil/sign/DODJITCEMAILCA_29.cer"  
+                    URI: "http://ocsp.nsn0.rcvs.nit.disa.mil"  
+
+
+    * Install the Root CA Certificate
+
+    [root@thirdstrike ~]# file DODJITCCA_29.cer  
+    DODJITCCA_29.cer: data  
+    [root@thirdstrike ~]# certutil -A -n DODJITCCA_29.cer -t "CT,C,C" -d /etc/pki/nssdb/ -i DODJITCCA_29.cer  
+    [root@thirdstrike ~]# certutil -L -d /etc/pki/nssdb/  
+      
+    Certificate Nickname                                         Trust Attributes  
+                                                                 SSL,S/MIME,JAR/XPI  
+      
+    DODJITCCA_29.cer                                             CT,C,C  
+    rel3_dodroot_2048.cac                                        CT,C,C  
+
+ 
+
+    * Create and configure the CN mapping file for the user using the Smart Card CN
+
+    [root@thirdstrike ~]# vim /etc/pam_pkcs11/cn_map  
+    [root@thirdstrike ~]# cat /etc/pam_pkcs11/cn_map  
+    MCINTOSH.COURTNEY.2001396571 -> shadowman  
+
+    * Verify your Smart Card is configured for the user with pklogin_finder debug
+
+    [root@thirdstrike ~]# pklogin_finder debug  
+    DEBUG:pam_config.c:238: Using config file /etc/pam_pkcs11/pam_pkcs11.conf  
+    DEBUG:pkcs11_lib.c:182: Initializing NSS ...  
+    DEBUG:pkcs11_lib.c:192: Initializing NSS ... database=/etc/pki/nssdb  
+    DEBUG:pkcs11_lib.c:210: ...  NSS Complete  
+    DEBUG:pklogin_finder.c:71: loading pkcs #11 module...  
+    DEBUG:pkcs11_lib.c:222: Looking up module in list  
+    DEBUG:pkcs11_lib.c:225: modList = 0x1d7c7a0 next = 0x1d91000  
+      
+    DEBUG:pkcs11_lib.c:226: dllName= <null>  
+      
+    DEBUG:pkcs11_lib.c:225: modList = 0x1d91000 next = 0x0  
+      
+    DEBUG:pkcs11_lib.c:226: dllName= libcoolkeypk11.so  
+      
+    DEBUG:pklogin_finder.c:79: initialising pkcs #11 module...  
+    PIN for token:  
+    DEBUG:pkcs11_lib.c:48: PIN = [77777777]  
+    DEBUG:pkcs11_lib.c:746: cert 0: found (MCINTOSH.COURTNEY.2001396571:CAC ID Certificate), "CN=MCINTOSH.COURTNEY.2001396571,OU=USAF,OU=PKI,OU=DoD,O=U.S. Government,C=US"  
+    DEBUG:pkcs11_lib.c:746: cert 1: found (MCINTOSH.COURTNEY.2001396571:CAC Email Signature Certificate), "CN=MCINTOSH.COURTNEY.2001396571,OU=USAF,OU=PKI,OU=DoD,O=U.S. Government,C=US"  
+    DEBUG:mapper_mgr.c:172: Retrieveing mapper module list  
+    DEBUG:mapper_mgr.c:73: Loading static module for mapper 'cn'  
+    DEBUG:mapper_mgr.c:197: Inserting mapper [cn] into list  
+    DEBUG:mapper_mgr.c:73: Loading static module for mapper 'uid'  
+    DEBUG:mapper_mgr.c:197: Inserting mapper [uid] into list  
+    DEBUG:mapper_mgr.c:73: Loading static module for mapper 'pwent'  
+    DEBUG:mapper_mgr.c:197: Inserting mapper [pwent] into list  
+    DEBUG:mapper_mgr.c:73: Loading static module for mapper 'null'  
+    DEBUG:mapper_mgr.c:197: Inserting mapper [null] into list  
+    DEBUG:pklogin_finder.c:127: Found '2' certificate(s)  
+    DEBUG:pklogin_finder.c:131: verifing the certificate #1  
+    DEBUG:cert_vfy.c:34: Verifying Cert: MCINTOSH.COURTNEY.2001396571:CAC ID Certificate (CN=MCINTOSH.COURTNEY.2001396571,OU=USAF,OU=PKI,OU=DoD,O=U.S. Government,C=US)  
+    DEBUG:pklogin_finder.c:145: Trying to deduce login from certificate  
+    DEBUG:pklogin_finder.c:151: Certificate is valid and maps to user shadowman  
+    shadowman  
+    DEBUG:mapper_mgr.c:214: unloading mapper module list  
+    DEBUG:mapper_mgr.c:137: calling mapper_module_end() cn  
+    DEBUG:mapper_mgr.c:148: Module cn is static: don't remove  
+    DEBUG:mapper_mgr.c:137: calling mapper_module_end() uid  
+    DEBUG:mapper_mgr.c:148: Module uid is static: don't remove  
+    DEBUG:mapper_mgr.c:137: calling mapper_module_end() pwent  
+    DEBUG:mapper_mgr.c:148: Module pwent is static: don't remove  
+    DEBUG:mapper_mgr.c:137: calling mapper_module_end() null  
+    DEBUG:mapper_mgr.c:148: Module null is static: don't remove  
+    DEBUG:pklogin_finder.c:169: releasing pkcs #11 module...  
+    DEBUG:pklogin_finder.c:172: Process completed  
+    [root@thirdstrike ~]#  
+
+    * Note: Line 34 shows success.  If this does not work, you will get an error here.  This maps back to the Root CA Certificate not properly installed in NSS
+    * Enable Smart Card Authentication in Gnome
+    
+    * Click System -> Administration -> Authentication
+    * Click Advanced Options and Check Enable smart card support and click Apply
+    *Log out of Gnome and try authenticating against the smart card
