@@ -1,0 +1,224 @@
+RHEL{5,6} Workstation to RHEL{5,6} Server migration HOW-TO
+==========================================================
+:Author:    Robin Price II
+:Email:     <robin@redhat.com>
+:Date:      Q1 - 2017
+:Revision:  1.0.0
+:icons: font
+
+{nbsp} 
+{nbsp} 
+{nbsp}
+
+.Document Overview
+* This document provides the steps to convert a +Red Hat Enterprise Linux {5,6} Workstation+ system to a +Red Hat Enterprise Linux {5,6} Server+ system +
+* Steps include +Red Hat Subscription Manager+ and +RHN Classic registration+.
+* Steps to add +Extended Life Cycle Support (ELS)+ are provided at the end.
+
+{nbsp} 
+{nbsp} 
+{nbsp}
+
+.Why would customers need to do this?
+* ELS is not supported on Workstation.
+* Customer thought Workstation was okay to use as a production server.
+* Reinstalling the Workstation to Server will take time, money, and could be disruptive.
+
+{nbsp} 
+{nbsp} 
+{nbsp}
+
+.Helpful links:
+* How to migrate a Red Hat Enterprise Linux System from RHN Classic to RHSM?
+** https://access.redhat.com/solutions/129723
+* How do I access RHEL 5 ELS content after RHEL 5 transitions to Extended Life Phase?
+** https://access.redhat.com/articles/2973131
+* FAQ: Red Hat Enterprise Linux 5 Extended Life Cycle Support (ELS) Add-On
+** https://access.redhat.com/articles/2901061
+* Red Hat Enterprise Linux Life Cycle
+** https://access.redhat.com/support/policy/updates/errata
+
+{nbsp} 
+{nbsp} 
+{nbsp}
+
+RHEL5 or RHEL6 using RHSM registration
+--------------------------------------
+IMPORTANT:  You will need a `Red Hat Enterprise Linux Server` subscription.  If your account only has `Red Hat Enterprise Linux Workstation` subscriptions, you will *not* be able to see the server channel (repository) to download this file.
+
+IMPORTANT:  Change the `redhat-release` package to match the version you are working.
+
+Quick Steps
+~~~~~~~~~~~
+* Download server release rpm
+* Remove workstation release rpm
+* Remove RHSM registration
+* Install server release rpm
+* Use correct x.509 certs
+* Re-register using RHSM
+
+{nbsp} 
+{nbsp} 
+{nbsp}
+
+Detailed Steps
+~~~~~~~~~~~~~~
+* Visit the Red Hat https://access.redhat.com[Customer Portal] or Red Hat Satellite and download the latest `redhat-release package` from the `Red Hat Enterprise Linux Server` base channel.
+
+.Example:
+[source,bash]
+----
+[root@0x83 ~]# ls redhat-release*
+redhat-release-5Server-5.11.0.9.x86_64.rpm
+----
+NOTE: This package will be different on your Workstation.
+[source,bash]
+----
+[root@0x83 ~]# rpm -qa | grep redhat-release
+redhat-release-5Client-5.11.0.9
+----
+ 
+* Remove the `redhat-release` workstation rpm.
+[source,bash]
+----
+[root@0x83 ~]# rpm -e --nodeps redhat-release-5Client-5.11.0.9
+[root@0x83 ~]#
+----
+
+* Un-register and clean RHSM files.
+[source,bash]
+----
+[root@0x83 ~]# subscription-manager unregister
+System has been unregistered.
+[root@0x83 ~]# subscription-manager clean
+All local data removed
+----
+TIP:  The commands above clear information on the Candlepin server related to this system and clears information locally on the system, including the certificate files located `/etc/pki/entitlement` and `/etc/pki/consumer`.
+
+* Install the `redhat-release*` server rpm.
+[source,bash]
+----
+[root@0x83 ~]# rpm -ivh redhat-release-5Server-5.11.0.9.x86_64.rpm
+Preparing...                ########################################### [100%]
+   1:redhat-release         ########################################### [100%]
+----
+ 
+* Replace the `x.509` product certificates from `Workstation(68.pem)` to `Server(69.pem)`.
+[source,bash]
+----
+[root@0x83 ~]# mv /etc/pki/product/68.pem /etc/pki/product-default/
+[root@0x83 ~]# mv /etc/pki/product-default/69.pem /etc/pki/product
+----
+ 
+* Re-register the machine with `Red Hat Subscription Manager`
+[source,bash]
+----
+[root@0x83 ~]# subscription-manager register
+Username: customer-portal-login
+Password:
+The system has been registered with ID: 5654c2e1-ec40-40d9-a98f-2530893ca7b2
+[root@0x83 ~]# subscription-manager list --available --all
+[root@0x83 ~]# subscription-manager attach --pool=8a85f98156b0b7e20156b3367c3b6f6d
+Successfully attached a subscription for: Red Hat Employee Subscription
+----
+NOTE: The server will now be registered as `Red Hat Enterprise Linux Server` and will get access to the `rhel-x86_64-server-6` base channel.
+
+Connecting Red Hat Enterprise Linux 5 systems to ELS content via Red Hat Subscription Management (RHSM)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* Ensure that the system is using 5Server as its release version, as ELS content is only released for the 5Server
+[source,bash]
+----
+[root@0x83 ~]# subscription-manager release --set 5Server
+----
+* Find your ELS subscription.
+[source,bash]
+----
+[root@0x83 ~]# subscription-manager list --all --available
++-------------------------------------------+
+    Available Subscriptions
++-------------------------------------------+
+Subscription Name: Red Hat Enterprise Linux Extended Life Cycle Support (Physical or Virtual Nodes)
+Provides:          Red Hat Enterprise Linux Server - Extended Life Cycle Support
+SKU:               RH00270
+Contract:          11260534
+Pool ID:           8a99f9835a4887e0015a685ef286223d
+Available:         90
+Suggested:         1
+Service Level:     Layered
+Service Type:      L1-L3
+Subscription Type: Instance Based
+Ends:              02/20/2018
+System Type:       Physical
+----
+NOTE: Find the `Pool ID` above and attach the subscription.
+[source,bash]
+----
+[root@0x83 ~]# subscription-manager attach --pool 8a99f9835a4887e0015a685ef286223d
+Successfully attached a subscription for: Red Hat Enterprise Linux Extended Life Cycle Support (Physical or Virtual Nodes)
+----
+* Enable the ELS repo
+[source,bash]
+----
+[root@0x83 ~]# subscription-manager repos --enable rhel-5-server-els-rpms
+Repo 'rhel-5-server-els-rpms' is enabled for this system.
+----
+
+{nbsp} 
+{nbsp} 
+{nbsp}
+
+RHEL5 or RHEL6 using RHN Classic registration
+---------------------------------------------
+Quick Steps
+~~~~~~~~~~~
+* Download server release rpm
+* Remove workstation release rpm
+* Install server release rpm
+* Remove old RHN profile
+* Re-register to get new rhn profile
+
+{nbsp} 
+{nbsp} 
+{nbsp}
+
+Detailed Steps
+~~~~~~~~~~~~~~
+* Visit the Red Hat https://access.redhat.com[Customer Portal] or Red Hat Satellite and download the latest `redhat-release package` from the `Red Hat Enterprise Linux Server` base channel.
+
+.Example:
+[source,bash]
+----
+[root@0x83 ~]# ls redhat-release*
+redhat-release-5Server-5.11.0.9.x86_64.rpm
+----
+NOTE: This package will be different on your Workstation.
+[source,bash]
+----
+[root@0x83 ~]# rpm -qa | grep redhat-release
+redhat-release-5Client-5.11.0.9
+----
+ 
+* Remove the `redhat-release` workstation rpm.
+[source,bash]
+----
+[root@0x83 ~]# rpm -e --nodeps redhat-release-5Client-5.11.0.9
+[root@0x83 ~]#
+----
+
+* Install the `redhat-release*` server rpm.
+[source,bash]
+----
+[root@0x83 ~]# rpm -ivh redhat-release-5Server-5.11.0.9.x86_64.rpm
+Preparing...                ########################################### [100%]
+   1:redhat-release         ########################################### [100%]
+----
+
+* Then remove the profile off of RHN or Satellite and re-register the machine.
+
+TIP: Log into https://access.redhat.com to remove the profile from RHN Classic.
+
+[source,bash]
+----
+[root@0x83 ~]# rhn_register
+----
+NOTE: The server will now be registered as `Red Hat Enterprise Linux Server` and will get access to the `rhel-x86_64-server-6` base channel.
